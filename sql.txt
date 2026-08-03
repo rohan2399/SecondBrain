@@ -1,0 +1,37 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS note_chunks (
+    id BIGSERIAL PRIMARY KEY,
+    file_path TEXT NOT NULL,
+    file_hash TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    header_context TEXT,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    embedding VECTOR(768),            -- 768 dimensions for nomic-embed-text
+    -- Automatically generate Full-Text Search tokens from headers and text
+    fts tsvector GENERATED ALWAYS AS (
+        to_tsvector('english', coalesce(header_context, '') || ' ' || content)
+    ) STORED,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(file_path, chunk_index)
+);
+
+-- Fast indexes for local HNSW vector similarity & GIN keyword search
+CREATE INDEX IF NOT EXISTS note_chunks_embedding_idx 
+    ON note_chunks USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS note_chunks_fts_idx 
+    ON note_chunks USING GIN (fts);
+
+CREATE INDEX IF NOT EXISTS note_chunks_metadata_idx 
+    ON note_chunks USING GIN (metadata);
+
+
+
+
+-- 1. Delete known template placeholders
+DELETE FROM note_chunks 
+WHERE content ILIKE '%*Type your personal notes here...*%'
+   OR content ILIKE '%**Last Synced:**%'
+   OR content = '---';
