@@ -19,4 +19,4 @@ Embeds the search query with the same Ollama model.
 Runs a single SQL query doing Reciprocal Rank Fusion (RRF): it ranks results from a vector similarity search (embedding <=> query_vector) and a full-text search (ts_rank_cd / plainto_tsquery) separately, then combines their ranks with 1/(60+rank) scoring so both signals contribute.
 Returns the top-K chunks with file path, header, content snippet, and combined score.
 
-![Project Architecture](./obsidian_document_pipeline_flow.svg)
+![Project Architecture](./second_brain_pipeline_flow.svg)
