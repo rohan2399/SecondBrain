@@ -1,0 +1,9 @@
+flask
+psycopg2-binary
+python-frontmatter
+ollama
+
+pip install --upgrade pip
+pip install python-dotenv pytesseract Pillow pymupdf pdfplumber pandas python-pptx openpyxl docx2pdf langchain langchain-core langchain-community langchain-text-splitters pydantic pydantic-settings
+pip install tabulate
+from langchain_core.documents import Document

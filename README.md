@@ -1,22 +1,61 @@
-# SecondBrain
-SecondBrain : An Extension to Markdownwala
+# Second Brain — Chat UI
 
-This is a nice local-first "second brain" pipeline: it takes your Obsidian markdown notes, chunks them, embeds them locally with Ollama, stores everything in PostgreSQL (with pgvector), and then lets you search across your notes using a hybrid of semantic + keyword search. Let me break down both files and show you the flow.
+A local chat interface for your Obsidian RAG pipeline, styled after claude.ai's web interface.
 
-What each file does
+## How it fits with your existing code
 
-## secondbrain.py — the ingestion/sync pipeline
+- `secondbrain.py` and `test_search.py` are your original files, unchanged.
+- `app.py` imports `hybrid_search()` directly from `test_search.py` — retrieval logic is not duplicated anywhere.
+- On each user message, `app.py`:
+  1. Calls `hybrid_search(user_message, top_k=TOP_K)` (from `test_search.py`) to retrieve chunks from `note_chunks` in Postgres.
+  2. Builds a context block from the returned `(file_path, header_context, content, rrf_score)` rows.
+  3. Sends that context + the question to a local Ollama chat model (`CHAT_MODEL`, default `llama3.1`) and streams the answer back to the browser via Server-Sent Events.
+  4. The UI shows the streamed answer plus a collapsible "N sources from your notes" panel listing each chunk's file, section, snippet, and RRF score.
 
-Resolves folder paths (input docs, Obsidian vault, attachments) relative to the script's own location, creating them if missing.
-Walks the Obsidian vault directory tree (skipping hidden folders like .obsidian).
-For each .md file: computes a SHA-256 hash and skips it if unchanged since last sync (cheap incremental sync).
-If changed, deletes old chunks for that file, parses YAML frontmatter, and splits the body into chunks by markdown headers (#, ##, ###).
-For each chunk, builds an embedding string (File: ... | Section: ...\n<text>), calls local Ollama (nomic-embed-text model) to get a vector, and inserts the row into a note_chunks table in Postgres — storing path, hash, chunk index, header, content, metadata, and embedding.
+## Setup
 
-## test_search.py — the retrieval pipeline
+```bash
+cd secondbrain_app
+pip install -r requirements.txt
+```
 
-Embeds the search query with the same Ollama model.
-Runs a single SQL query doing Reciprocal Rank Fusion (RRF): it ranks results from a vector similarity search (embedding <=> query_vector) and a full-text search (ts_rank_cd / plainto_tsquery) separately, then combines their ranks with 1/(60+rank) scoring so both signals contribute.
-Returns the top-K chunks with file path, header, content snippet, and combined score.
+Make sure, as with your existing scripts:
+- Postgres is running and `DATABASE_URL` is set (or the default `postgresql://postgres:admin@localhost:5432/second_brain` is correct).
+- Ollama is running locally (`ollama serve`) with `nomic-embed-text` pulled (for embeddings, used by `test_search.py`) and a chat model pulled — default is `llama3.1`:
+  ```bash
+  ollama pull nomic-embed-text
+  ollama pull llama3.1
+  ```
+- You've already run `secondbrain.py` at least once to populate `note_chunks`.
 
-![Project Architecture](./second_brain_pipeline_flow.svg)
+## Run
+
+```bash
+python app.py
+```
+
+Open `http://127.0.0.1:5000`.
+
+## Configuration (env vars)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://postgres:admin@localhost:5432/second_brain` | Same as your existing scripts |
+| `CHAT_MODEL` | `llama3.1` | Ollama model used to generate answers |
+| `RAG_TOP_K` | `5` | Number of chunks retrieved per question |
+
+## Files
+
+```
+app.py              Flask backend, /api/chat streaming endpoint
+secondbrain.py       (unchanged) vault → Postgres sync
+test_search.py        (unchanged) hybrid_search() — imported by app.py
+templates/index.html   Chat page markup
+static/style.css        claude.ai-styled visual design
+static/chat.js            SSE streaming client, message rendering, chat history
+```
+
+## Notes
+
+- Chat history is in-memory per browser tab (resets on page reload) — there's no chat-persistence table in your schema, so nothing is written to Postgres by this app beyond what `secondbrain.py` already does.
+- If `hybrid_search()` or Ollama generation fails (e.g. Postgres/Ollama not running), the UI shows an inline error banner rather than crashing.
