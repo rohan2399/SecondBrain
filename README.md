@@ -59,3 +59,6 @@ static/chat.js            SSE streaming client, message rendering, chat history
 
 - Chat history is in-memory per browser tab (resets on page reload) — there's no chat-persistence table in your schema, so nothing is written to Postgres by this app beyond what `secondbrain.py` already does.
 - If `hybrid_search()` or Ollama generation fails (e.g. Postgres/Ollama not running), the UI shows an inline error banner rather than crashing.
+
+
+<img src="second_brain_pipeline_flow.svg" alt="Second Brain" width="1000" height="1000" />
